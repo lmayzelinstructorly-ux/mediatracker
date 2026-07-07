@@ -40,7 +40,12 @@ A full-stack local media tracker for movies, TV, anime, and custom entries. The 
 - `npm run client` starts only Vite.
 - `npm run build` builds the frontend.
 - `npm run lint` runs ESLint.
+- `npm run test:e2e` runs the Playwright UI tests in `e2e/`.
 - `npm start` starts the API without nodemon.
+
+## Testing
+
+Playwright e2e tests live in `e2e/`. The current tests mock backend API routes, so they validate important UI flows without touching `data/media.sqlite`. See `e2e/README.md` before converting them to real backend-backed tests.
 
 ## Features
 
