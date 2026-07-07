@@ -24,6 +24,8 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
+Because `@playwright/test` was added to `package.json`, run `npm install` locally and commit the regenerated `package-lock.json` before treating the e2e setup as fully clean.
+
 ## Next step
 
 The next best testing PR is to add true backend-backed e2e once the server supports `MEDIA_DB_PATH`. At that point, add a global setup file that deletes `data/e2e-test.sqlite`, `data/e2e-test.sqlite-wal`, and `data/e2e-test.sqlite-shm` before every full run.
