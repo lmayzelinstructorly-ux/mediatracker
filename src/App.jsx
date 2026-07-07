@@ -1027,10 +1027,10 @@ function BackupPanel({ fileName, importing, restoring, preview, confirmed, onExp
           Export backup
         </button>
         <form onSubmit={submit} className="space-y-3">
-          <label className="file-drop">
+          <label className="file-drop" htmlFor="backup-file-input">
             <Upload className="h-5 w-5 text-amber-300" />
             <span className="min-w-0 flex-1 truncate">{fileName || 'Choose JSON backup'}</span>
-            <input name="backupFile" type="file" accept="application/json,.json" onChange={(event) => onPreview(event.target.files?.[0] || null)} />
+            <input id="backup-file-input" name="backupFile" type="file" accept="application/json,.json" onChange={(event) => onPreview(event.target.files?.[0] || null)} />
           </label>
           <button className="secondary-command" type="submit" disabled={importing}>
             {importing ? 'Reading backup...' : 'Preview backup'}
