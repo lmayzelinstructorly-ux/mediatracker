@@ -28,6 +28,7 @@ export default defineConfig({
       TMDB_API_KEY: '',
       TMDB_READ_ACCESS_TOKEN: '',
       FRAMELOG_E2E_TMDB_FIXTURES: 'true',
+      FRAMELOG_E2E_GEMINI_FIXTURES: 'true',
     },
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,

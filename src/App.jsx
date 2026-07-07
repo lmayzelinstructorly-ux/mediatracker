@@ -780,7 +780,7 @@ function App() {
                   <button className="command" onClick={() => runRecommendations('trending', 'Culturally popular right now')}>Trending refresh</button>
                   <div className="search-row md:col-span-2">
                     <input value={mood} onChange={(event) => setMood(event.target.value)} placeholder="dark psychological thriller, cozy anime night, bleak prestige drama" />
-                    <button title="Get mood picks" onClick={() => runRecommendations('mood', mood)}>
+                    <button title="Get mood picks" aria-label="Get mood picks" onClick={() => runRecommendations('mood', mood)}>
                       <Lightbulb className="h-4 w-4" />
                     </button>
                   </div>

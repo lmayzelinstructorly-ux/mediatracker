@@ -57,6 +57,7 @@ const PORT = Number(process.env.PORT || 3000)
 const tmdbKey = process.env.TMDB_API_KEY
 const tmdbToken = process.env.TMDB_READ_ACCESS_TOKEN
 const useE2eTmdbFixtures = process.env.FRAMELOG_E2E_TMDB_FIXTURES === 'true'
+const useE2eGeminiFixtures = process.env.FRAMELOG_E2E_GEMINI_FIXTURES === 'true'
 const posterBase = 'https://image.tmdb.org/t/p/w500'
 const backupSchema = 'framelog.backup.v1'
 const e2eTmdbFixtureResults = [
@@ -71,6 +72,22 @@ const e2eTmdbFixtureResults = [
     runtime: 102,
     release_year: '1999',
     tmdb_rating: 7.1,
+  },
+]
+const e2eGeminiFixtureRecommendations = [
+  {
+    title: 'Fixture Neon Harbor',
+    type: 'movie',
+    reason: 'A deterministic recommendation used for e2e testing.',
+    mood: 'moody sci-fi',
+    confidence: 91,
+  },
+  {
+    title: 'Fixture Quiet Signal',
+    type: 'tv',
+    reason: 'Another stable recommendation for Playwright coverage.',
+    mood: 'slow-burn mystery',
+    confidence: 84,
   },
 ]
 const knownTitleCorrections = new Map([
@@ -1268,6 +1285,15 @@ async function importWatchlistFromPdf(buffer) {
 }
 
 async function geminiRecommendations(mode, context) {
+  if (useE2eGeminiFixtures) {
+    return {
+      model: 'e2e-gemini-fixture',
+      attemptedModels: ['e2e-gemini-fixture'],
+      fallbackCount: 0,
+      suggestions: e2eGeminiFixtureRecommendations,
+    }
+  }
+
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('Missing GEMINI_API_KEY')
   }
