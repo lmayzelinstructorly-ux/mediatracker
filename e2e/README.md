@@ -7,6 +7,7 @@ This folder contains a backend-backed Playwright UI test layer for FrameLog.
 - App shell rendering
 - Adding a custom media entry through the UI
 - Uploading a PDF watchlist through the real browser file input
+- Exporting, previewing, and safely merge-restoring a JSON backup through the real backend
 
 The PDF test uses Playwright's `setInputFiles()` API. This is intentional. Do not try to click through the native operating-system file picker in an automated browser test, because the agent cannot reliably see or control that dialog.
 

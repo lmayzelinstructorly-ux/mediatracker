@@ -6,6 +6,7 @@ import {
   Check,
   Clapperboard,
   Clock,
+  Download,
   FileText,
   Film,
   Lightbulb,
@@ -300,6 +301,12 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [pdfImporting, setPdfImporting] = useState(false)
   const [pdfImportResult, setPdfImportResult] = useState(null)
+  const [backupImporting, setBackupImporting] = useState(false)
+  const [backupRestoring, setBackupRestoring] = useState(false)
+  const [backupFileName, setBackupFileName] = useState('')
+  const [backupDraft, setBackupDraft] = useState(null)
+  const [backupPreview, setBackupPreview] = useState(null)
+  const [backupConfirmed, setBackupConfirmed] = useState(false)
   const [toast, setToast] = useState('')
   const [addingKeys, setAddingKeys] = useState(() => new Set())
   const [completionDraft, setCompletionDraft] = useState(null)
@@ -468,6 +475,73 @@ function App() {
       setToast(error.message)
     } finally {
       setPdfImporting(false)
+    }
+  }
+
+  async function exportBackup() {
+    try {
+      const backup = await api('/backup/export')
+      const today = new Date().toISOString().slice(0, 10)
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `framelog-backup-${today}.json`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      setToast('Backup exported')
+    } catch (error) {
+      setToast(error.message)
+    }
+  }
+
+  async function previewBackupFile(file) {
+    if (!file) return
+    setBackupImporting(true)
+    setBackupFileName(file.name)
+    setBackupPreview(null)
+    setBackupDraft(null)
+    setBackupConfirmed(false)
+    try {
+      const backup = JSON.parse(await file.text())
+      const preview = await api('/backup/preview', {
+        method: 'POST',
+        body: JSON.stringify(backup),
+      })
+      setBackupDraft(backup)
+      setBackupPreview(preview)
+      setToast(`Backup preview ready: ${preview.willCreate} new titles`)
+    } catch (error) {
+      setToast(error.message)
+    } finally {
+      setBackupImporting(false)
+    }
+  }
+
+  async function restoreBackup() {
+    if (!backupDraft || !backupPreview || !backupConfirmed) return
+    setBackupRestoring(true)
+    try {
+      const result = await api('/backup/restore', {
+        method: 'POST',
+        body: JSON.stringify({ backup: backupDraft, mode: 'merge' }),
+      })
+      await loadMedia()
+      setBackupPreview({
+        ok: true,
+        total: result.created.length + result.skipped.length + result.invalid.length,
+        willCreate: 0,
+        duplicates: result.skipped,
+        invalid: result.invalid,
+      })
+      setBackupConfirmed(false)
+      setToast(`Restored ${result.created.length} titles, skipped ${result.skipped.length} duplicates`)
+    } catch (error) {
+      setToast(error.message)
+    } finally {
+      setBackupRestoring(false)
     }
   }
 
@@ -777,6 +851,20 @@ function App() {
                   <span>{notifications ? 'Notifications on' : 'Notifications off'}</span>
                 </button>
               </Panel>
+              <Panel className="md:col-span-2">
+                <SectionTitle icon={Download} title="Backup and restore" kicker="Local JSON" />
+                <BackupPanel
+                  fileName={backupFileName}
+                  importing={backupImporting}
+                  restoring={backupRestoring}
+                  preview={backupPreview}
+                  confirmed={backupConfirmed}
+                  onExport={exportBackup}
+                  onPreview={previewBackupFile}
+                  onConfirm={setBackupConfirmed}
+                  onRestore={restoreBackup}
+                />
+              </Panel>
             </div>
           </section>
         )}
@@ -906,6 +994,71 @@ function PdfImportPanel({ importing, result, onImport }) {
         </div>
       )}
     </form>
+  )
+}
+
+function BackupPanel({ fileName, importing, restoring, preview, confirmed, onExport, onPreview, onConfirm, onRestore }) {
+  const canRestore = Boolean(preview?.ok && confirmed && !restoring)
+
+  async function submit(event) {
+    event.preventDefault()
+    await onPreview(event.currentTarget.elements.backupFile.files?.[0] || null)
+    event.currentTarget.reset()
+  }
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
+      <div className="space-y-3">
+        <button className="command w-full" type="button" onClick={onExport}>
+          <Download className="h-4 w-4" />
+          Export backup
+        </button>
+        <form onSubmit={submit} className="space-y-3">
+          <label className="file-drop">
+            <Upload className="h-5 w-5 text-amber-300" />
+            <span className="min-w-0 flex-1 truncate">{fileName || 'Choose JSON backup'}</span>
+            <input name="backupFile" type="file" accept="application/json,.json" onChange={(event) => onPreview(event.target.files?.[0] || null)} />
+          </label>
+          <button className="secondary-command" type="submit" disabled={importing}>
+            {importing ? 'Reading backup...' : 'Preview backup'}
+          </button>
+        </form>
+      </div>
+
+      <div className="rounded border border-white/10 bg-white/5 p-3 text-sm leading-6 text-[var(--muted)]">
+        {preview ? (
+          <>
+            <SettingRow label="Total items" value={preview.total} />
+            <SettingRow label="Will create" value={preview.willCreate} />
+            <SettingRow label="Duplicates" value={preview.duplicates?.length || 0} />
+            <SettingRow label="Invalid" value={preview.invalid?.length || 0} />
+            <label className="mt-4 flex items-start gap-3 text-[var(--heading)]">
+              <input className="mt-1" type="checkbox" checked={confirmed} onChange={(event) => onConfirm(event.target.checked)} />
+              <span>I understand this will merge new items into my library.</span>
+            </label>
+            <button className="command mt-4 w-full" type="button" disabled={!canRestore} onClick={onRestore}>
+              {restoring ? 'Restoring...' : 'Restore backup'}
+            </button>
+            {Boolean(preview.duplicates?.length) && (
+              <div className="import-result-list">
+                {preview.duplicates.slice(0, 8).map((item, index) => (
+                  <p key={`${item.title}-${index}`} className="truncate">Duplicate: {item.title} / {item.status}</p>
+                ))}
+              </div>
+            )}
+            {Boolean(preview.invalid?.length) && (
+              <div className="import-result-list">
+                {preview.invalid.slice(0, 8).map((item, index) => (
+                  <p key={`${item.title}-${index}`} className="truncate">Invalid: {item.title || 'Untitled'} / {item.reason}</p>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <p>No backup preview loaded.</p>
+        )}
+      </div>
+    </div>
   )
 }
 

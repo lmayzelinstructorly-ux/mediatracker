@@ -315,6 +315,7 @@ textarea.field {
 
 .command:disabled,
 .mini-button:disabled,
+.secondary-command:disabled,
 .search-row button:disabled,
 .icon-button:disabled {
   cursor: not-allowed;

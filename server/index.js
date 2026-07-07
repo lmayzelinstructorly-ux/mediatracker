@@ -57,6 +57,7 @@ const PORT = Number(process.env.PORT || 3000)
 const tmdbKey = process.env.TMDB_API_KEY
 const tmdbToken = process.env.TMDB_READ_ACCESS_TOKEN
 const posterBase = 'https://image.tmdb.org/t/p/w500'
+const backupSchema = 'framelog.backup.v1'
 const knownTitleCorrections = new Map([
   ['tomadachi game', 'Tomodachi Game'],
   ['2025 superman', 'Superman 2025'],
@@ -586,6 +587,113 @@ function insertMedia(payload) {
   `)
   const result = stmt.run(mediaPayload)
   return rowToMedia(db.prepare('SELECT * FROM media WHERE id = ?').get(result.lastInsertRowid))
+}
+
+function settingsObject() {
+  return Object.fromEntries(
+    db.prepare('SELECT * FROM settings').all().map((row) => [row.key, parseJson(row.value, row.value)]),
+  )
+}
+
+function normalizeBackupList(value) {
+  return Array.isArray(value) ? value.filter((item) => item != null && item !== '') : []
+}
+
+function normalizeBackupMediaItem(rawItem) {
+  if (!rawItem || typeof rawItem !== 'object' || Array.isArray(rawItem)) {
+    return {
+      item: { title: '', type: 'movie', status: 'Want to Watch' },
+      invalid: { title: '', reason: 'Media item must be an object' },
+    }
+  }
+
+  const title = String(rawItem.title || '').trim()
+  const item = {
+    tmdb_id: rawItem.tmdb_id ?? null,
+    title,
+    type: rawItem.type || 'movie',
+    cover_art: rawItem.cover_art || '',
+    genres: normalizeBackupList(rawItem.genres),
+    tags: normalizeBackupList(rawItem.tags),
+    description: rawItem.description || '',
+    runtime: Number(rawItem.runtime) || 0,
+    release_year: rawItem.release_year ? String(rawItem.release_year) : '',
+    tmdb_rating: rawItem.tmdb_rating ?? null,
+    status: rawItem.status || 'Want to Watch',
+    priority: Number(rawItem.priority) || 0,
+    personal_rating: rawItem.personal_rating ?? null,
+    reflection: rawItem.reflection || '',
+    season: Number(rawItem.season) || 1,
+    episode: Number(rawItem.episode) || 0,
+    completed_at: rawItem.completed_at || null,
+    reminder_at: rawItem.reminder_at || null,
+  }
+
+  return {
+    item,
+    invalid: title ? null : { title, reason: 'Title is required' },
+  }
+}
+
+function parseBackupPayload(backup) {
+  if (!backup || typeof backup !== 'object' || Array.isArray(backup)) {
+    throw new Error('Backup must be a JSON object')
+  }
+  if (backup.schema !== backupSchema) {
+    throw new Error(`Backup schema must be ${backupSchema}`)
+  }
+  if (!Array.isArray(backup.media)) {
+    throw new Error('Backup media must be an array')
+  }
+  if (
+    backup.settings !== undefined
+    && (!backup.settings || typeof backup.settings !== 'object' || Array.isArray(backup.settings))
+  ) {
+    throw new Error('Backup settings must be an object')
+  }
+  return backup
+}
+
+function backupDuplicateSummary(item) {
+  return {
+    title: item.title,
+    type: item.type || 'movie',
+    status: item.status || 'Want to Watch',
+  }
+}
+
+function backupMediaPlan(backup) {
+  const parsed = parseBackupPayload(backup)
+  const existingKeys = new Set(mediaRows().map(mediaIdentityKey))
+  const createKeys = new Set()
+  const create = []
+  const duplicates = []
+  const invalid = []
+
+  for (const rawItem of parsed.media) {
+    const { item, invalid: invalidItem } = normalizeBackupMediaItem(rawItem)
+    if (invalidItem) {
+      invalid.push(invalidItem)
+      continue
+    }
+
+    const key = mediaIdentityKey(item)
+    if (existingKeys.has(key) || createKeys.has(key) || findExistingMedia(item)) {
+      duplicates.push(backupDuplicateSummary(item))
+      continue
+    }
+
+    createKeys.add(key)
+    create.push(item)
+  }
+
+  return {
+    total: parsed.media.length,
+    create,
+    duplicates,
+    invalid,
+    settings: parsed.settings,
+  }
 }
 
 async function tmdbFetch(url) {
@@ -1282,6 +1390,65 @@ app.post('/api/import/pdf', upload.single('watchlist'), async (req, res) => {
   }
 })
 
+app.get('/api/backup/export', (_req, res) => {
+  res.json({
+    schema: backupSchema,
+    exported_at: new Date().toISOString(),
+    media: mediaRows(),
+    settings: settingsObject(),
+  })
+})
+
+app.post('/api/backup/preview', (req, res) => {
+  try {
+    const plan = backupMediaPlan(req.body)
+    res.json({
+      ok: true,
+      total: plan.total,
+      willCreate: plan.create.length,
+      duplicates: plan.duplicates,
+      invalid: plan.invalid,
+    })
+  } catch (error) {
+    res.status(400).json({ error: error.message })
+  }
+})
+
+app.post('/api/backup/restore', (req, res) => {
+  try {
+    if (req.body?.mode !== 'merge') {
+      return res.status(400).json({ error: 'Only merge restore mode is supported' })
+    }
+
+    const plan = backupMediaPlan(req.body.backup)
+    const created = []
+    const skipped = [...plan.duplicates]
+
+    for (const item of plan.create) {
+      const saved = insertMedia(item)
+      if (saved.duplicate) {
+        skipped.push(backupDuplicateSummary(saved))
+      } else {
+        created.push(saved)
+      }
+    }
+
+    if (plan.settings) {
+      const upsert = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
+      Object.entries(plan.settings).forEach(([key, value]) => upsert.run(key, JSON.stringify(value)))
+    }
+
+    res.json({
+      ok: true,
+      created,
+      skipped,
+      invalid: plan.invalid,
+    })
+  } catch (error) {
+    res.status(400).json({ error: error.message })
+  }
+})
+
 app.get('/api/stats', (_req, res) => {
   const items = mediaRows()
   const watched = items.filter((item) => item.status === 'Watched')
@@ -1317,7 +1484,6 @@ app.get('/api/stats', (_req, res) => {
 })
 
 app.get('/api/settings', (_req, res) => {
-  const rows = db.prepare('SELECT * FROM settings').all()
   res.json({
     api: {
       geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
@@ -1325,7 +1491,7 @@ app.get('/api/settings', (_req, res) => {
       geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
       geminiFallbacks: geminiModelQueue(),
     },
-    preferences: Object.fromEntries(rows.map((row) => [row.key, parseJson(row.value, row.value)])),
+    preferences: settingsObject(),
   })
 })
 

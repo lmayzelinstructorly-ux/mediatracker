@@ -45,13 +45,15 @@ A full-stack local media tracker for movies, TV, anime, and custom entries. The 
 
 ## Testing
 
-Playwright e2e tests live in `e2e/`. The current tests mock backend API routes, so they validate important UI flows without touching `data/media.sqlite`. See `e2e/README.md` before converting them to real backend-backed tests.
+Playwright e2e tests live in `e2e/`. They run the real Vite frontend and Express backend with `MEDIA_DB_PATH=data/e2e-test.sqlite`, so coverage can exercise SQLite-backed flows without touching `data/media.sqlite`.
 
 ## Features
 
 - Add media through TMDB title search with poster, description, genre, runtime, year, and rating data.
 - Add offline custom media entries.
 - Import a PDF watchlist: the backend extracts PDF text, Gemini interprets the titles, TMDB enriches matches, and SQLite saves the created list.
+- Export a local JSON backup and safely restore it in merge mode.
+- Restore backups without clearing the existing library or overwriting saved media.
 - Track Watched, Want to Watch, and Want to Rewatch lists.
 - Store title, type, cover art, genre tags, status, priority, rating, reflection, progress, and reminders.
 - Prompt for a short reflection and rating when marking media as Watched.
