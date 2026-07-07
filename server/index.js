@@ -56,8 +56,23 @@ const app = express()
 const PORT = Number(process.env.PORT || 3000)
 const tmdbKey = process.env.TMDB_API_KEY
 const tmdbToken = process.env.TMDB_READ_ACCESS_TOKEN
+const useE2eTmdbFixtures = process.env.FRAMELOG_E2E_TMDB_FIXTURES === 'true'
 const posterBase = 'https://image.tmdb.org/t/p/w500'
 const backupSchema = 'framelog.backup.v1'
+const e2eTmdbFixtureResults = [
+  {
+    tmdb_id: 909090,
+    title: 'Fixture Galaxy Quest',
+    type: 'movie',
+    cover_art: '',
+    genres: ['Adventure', 'Comedy'],
+    tags: ['Adventure', 'Comedy'],
+    description: 'A deterministic TMDB-style fixture used for e2e testing.',
+    runtime: 102,
+    release_year: '1999',
+    tmdb_rating: 7.1,
+  },
+]
 const knownTitleCorrections = new Map([
   ['tomadachi game', 'Tomodachi Game'],
   ['2025 superman', 'Superman 2025'],
@@ -1358,6 +1373,7 @@ app.get('/api/search/tmdb', async (req, res) => {
   try {
     const query = applyKnownTitleCorrection(String(req.query.q || '').trim())
     if (!query) return res.json([])
+    if (useE2eTmdbFixtures) return res.json(e2eTmdbFixtureResults)
     const data = await tmdbFetch(`https://api.themoviedb.org/3/search/multi?language=en-US&include_adult=false&query=${encodeURIComponent(query)}`)
     const items = (data.results || [])
       .filter((item) => ['movie', 'tv'].includes(item.media_type))

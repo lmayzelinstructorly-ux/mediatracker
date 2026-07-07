@@ -6,6 +6,7 @@ This folder contains a backend-backed Playwright UI test layer for FrameLog.
 
 - App shell rendering
 - Adding a custom media entry through the UI
+- Searching TMDB fixture results and adding one to the queue
 - Uploading a PDF watchlist through the real browser file input
 - Exporting, previewing, and safely merge-restoring a JSON backup through the real backend
 
@@ -15,7 +16,7 @@ The PDF test uses Playwright's `setInputFiles()` API. This is intentional. Do no
 
 These tests run the real Vite frontend and Express backend through Playwright's `webServer` command.
 
-The Playwright config sets `MEDIA_DB_PATH=data/e2e-test.sqlite`, so e2e runs use an isolated SQLite database and do not touch `data/media.sqlite`. It also blanks Gemini and TMDB API credentials for the test server, so the suite does not require external API keys. `e2e/global-setup.js` deletes the test database plus its WAL and SHM files before each run; npm also runs that cleanup before `npm run dev`, so the database is removed before the Express process opens it.
+The Playwright config sets `MEDIA_DB_PATH=data/e2e-test.sqlite`, so e2e runs use an isolated SQLite database and do not touch `data/media.sqlite`. It also blanks Gemini and TMDB API credentials for the test server, so the suite does not require external API keys. TMDB search e2e coverage runs with `FRAMELOG_E2E_TMDB_FIXTURES=true`, which makes the backend return deterministic fixture results instead of calling the real TMDB API. `e2e/global-setup.js` deletes the test database plus its WAL and SHM files before each run; npm also runs that cleanup before `npm run dev`, so the database is removed before the Express process opens it.
 
 ## Run
 
