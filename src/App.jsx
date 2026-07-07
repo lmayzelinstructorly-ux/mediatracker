@@ -532,7 +532,13 @@ function App() {
       setBackupPreview({
         ok: true,
         total: result.created.length + result.skipped.length + result.invalid.length,
+        restored: true,
         willCreate: 0,
+        create: result.created.map((item) => ({
+          title: item.title,
+          type: item.type || 'movie',
+          status: item.status || 'Want to Watch',
+        })),
         duplicates: result.skipped,
         invalid: result.invalid,
       })
@@ -999,6 +1005,13 @@ function PdfImportPanel({ importing, result, onImport }) {
 
 function BackupPanel({ fileName, importing, restoring, preview, confirmed, onExport, onPreview, onConfirm, onRestore }) {
   const canRestore = Boolean(preview?.ok && confirmed && !restoring)
+  const createItems = preview?.create || []
+  const duplicateItems = preview?.duplicates || []
+  const invalidItems = preview?.invalid || []
+  const createdMode = Boolean(preview?.restored)
+  const createLabel = createdMode ? 'Created' : 'Will create'
+  const createPrefix = createdMode ? 'Created' : 'Create'
+  const createEmpty = createdMode ? 'No new titles were created.' : 'No new titles will be created.'
 
   async function submit(event) {
     event.preventDefault()
@@ -1029,36 +1042,68 @@ function BackupPanel({ fileName, importing, restoring, preview, confirmed, onExp
         {preview ? (
           <>
             <SettingRow label="Total items" value={preview.total} />
-            <SettingRow label="Will create" value={preview.willCreate} />
-            <SettingRow label="Duplicates" value={preview.duplicates?.length || 0} />
-            <SettingRow label="Invalid" value={preview.invalid?.length || 0} />
+            <SettingRow label={createLabel} value={createdMode ? createItems.length : preview.willCreate} />
+            <SettingRow label="Duplicates" value={duplicateItems.length} />
+            <SettingRow label="Invalid" value={invalidItems.length} />
+            {createdMode && (
+              <p className="mt-4 rounded border border-white/10 bg-white/5 p-3 text-[var(--heading)]">
+                Restore complete. Created titles are listed separately; duplicates and invalid items were skipped.
+              </p>
+            )}
             <label className="mt-4 flex items-start gap-3 text-[var(--heading)]">
               <input className="mt-1" type="checkbox" checked={confirmed} onChange={(event) => onConfirm(event.target.checked)} />
-              <span>I understand this will merge new items into my library.</span>
+              <span>I understand this will merge only new titles into my library and skip duplicates.</span>
             </label>
             <button className="command mt-4 w-full" type="button" disabled={!canRestore} onClick={onRestore}>
               {restoring ? 'Restoring...' : 'Restore backup'}
             </button>
-            {Boolean(preview.duplicates?.length) && (
-              <div className="import-result-list">
-                {preview.duplicates.slice(0, 8).map((item, index) => (
-                  <p key={`${item.title}-${index}`} className="truncate">Duplicate: {item.title} / {item.status}</p>
-                ))}
-              </div>
-            )}
-            {Boolean(preview.invalid?.length) && (
-              <div className="import-result-list">
-                {preview.invalid.slice(0, 8).map((item, index) => (
-                  <p key={`${item.title}-${index}`} className="truncate">Invalid: {item.title || 'Untitled'} / {item.reason}</p>
-                ))}
-              </div>
-            )}
+            <div className="mt-4 space-y-4">
+              <PreviewList
+                title={createLabel}
+                emptyText={createEmpty}
+                items={createItems.slice(0, 8).map((item, index) => ({
+                  key: `${item.title}-${index}`,
+                  text: `${createPrefix}: ${item.title} / ${item.status}`,
+                }))}
+              />
+              <PreviewList
+                title="Duplicates skipped"
+                emptyText="No duplicates found."
+                items={duplicateItems.slice(0, 8).map((item, index) => ({
+                  key: `${item.title}-${index}`,
+                  text: `Duplicate: ${item.title} / ${item.status}`,
+                }))}
+              />
+              <PreviewList
+                title="Invalid items"
+                emptyText="No invalid items found."
+                items={invalidItems.slice(0, 8).map((item, index) => ({
+                  key: `${item.title || 'untitled'}-${index}`,
+                  text: `Invalid: ${item.title || 'Untitled'} / ${item.reason}`,
+                }))}
+              />
+            </div>
           </>
         ) : (
           <p>No backup preview loaded.</p>
         )}
       </div>
     </div>
+  )
+}
+
+function PreviewList({ title, emptyText, items }) {
+  return (
+    <section className="rounded border border-white/10 bg-white/5 p-3">
+      <h4 className="text-sm font-semibold text-[var(--heading)]">{title}</h4>
+      <div className="import-result-list">
+        {items.length ? (
+          items.map((item) => <p key={item.key} className="truncate">{item.text}</p>)
+        ) : (
+          <p>{emptyText}</p>
+        )}
+      </div>
+    </section>
   )
 }
 

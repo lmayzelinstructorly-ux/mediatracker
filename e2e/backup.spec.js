@@ -44,6 +44,9 @@ test('exports, previews, and restores a safe merge backup', async ({ request }) 
     total: 3,
     willCreate: 1,
   })
+  expect(preview.create).toEqual([
+    expect.objectContaining({ title: newTitle, type: 'movie', status: 'Watched' }),
+  ])
   expect(preview.duplicates).toEqual([
     expect.objectContaining({ title: existingTitle, type: 'custom', status: 'Want to Watch' }),
   ])

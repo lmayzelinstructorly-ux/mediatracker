@@ -1406,6 +1406,7 @@ app.post('/api/backup/preview', (req, res) => {
       ok: true,
       total: plan.total,
       willCreate: plan.create.length,
+      create: plan.create.map(backupDuplicateSummary),
       duplicates: plan.duplicates,
       invalid: plan.invalid,
     })
