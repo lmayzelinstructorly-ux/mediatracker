@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test'
-import { mockApi } from './helpers.js'
+import { waitForBackend } from './helpers.js'
 
-test('renders the FrameLog app shell', async ({ page }) => {
-  await mockApi(page)
+test('renders the FrameLog app shell', async ({ page, request }) => {
+  await waitForBackend(request)
   await page.goto('/')
 
   await expect(page.getByText('FrameLog')).toBeVisible()

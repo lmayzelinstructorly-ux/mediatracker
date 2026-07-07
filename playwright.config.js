@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/global-setup.js',
   timeout: 30_000,
   expect: {
     timeout: 5_000,
@@ -19,7 +20,14 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run client -- --host 127.0.0.1',
+    command: 'npm run dev',
+    env: {
+      MEDIA_DB_PATH: 'data/e2e-test.sqlite',
+      PORT: '3000',
+      GEMINI_API_KEY: '',
+      TMDB_API_KEY: '',
+      TMDB_READ_ACCESS_TOKEN: '',
+    },
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
   },

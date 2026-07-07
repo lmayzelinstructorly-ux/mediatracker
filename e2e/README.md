@@ -1,6 +1,6 @@
 # FrameLog Playwright e2e tests
 
-This folder contains a safe Playwright UI test layer for FrameLog.
+This folder contains a backend-backed Playwright UI test layer for FrameLog.
 
 ## What it covers
 
@@ -12,9 +12,9 @@ The PDF test uses Playwright's `setInputFiles()` API. This is intentional. Do no
 
 ## Safety model
 
-These tests currently mock `/api/*` routes from inside Playwright instead of starting the Express backend. That means they do not read from or write to `data/media.sqlite`.
+These tests run the real Vite frontend and Express backend through Playwright's `webServer` command.
 
-This is slightly less complete than a full backend e2e test, but it is safe for the current GitHub state because `server/index.js` still opens `data/media.sqlite` directly. Before switching these tests to the real backend, patch the server to respect a `MEDIA_DB_PATH` environment variable and run e2e against a disposable database such as `data/e2e-test.sqlite`.
+The Playwright config sets `MEDIA_DB_PATH=data/e2e-test.sqlite`, so e2e runs use an isolated SQLite database and do not touch `data/media.sqlite`. It also blanks Gemini and TMDB API credentials for the test server, so the suite does not require external API keys. `e2e/global-setup.js` deletes the test database plus its WAL and SHM files before each run; npm also runs that cleanup before `npm run dev`, so the database is removed before the Express process opens it.
 
 ## Run
 
@@ -23,9 +23,3 @@ npm install
 npx playwright install chromium
 npm run test:e2e
 ```
-
-Because `@playwright/test` was added to `package.json`, run `npm install` locally and commit the regenerated `package-lock.json` before treating the e2e setup as fully clean.
-
-## Next step
-
-The next best testing PR is to add true backend-backed e2e once the server supports `MEDIA_DB_PATH`. At that point, add a global setup file that deletes `data/e2e-test.sqlite`, `data/e2e-test.sqlite-wal`, and `data/e2e-test.sqlite-shm` before every full run.

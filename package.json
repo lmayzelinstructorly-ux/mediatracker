@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node e2e/global-setup.js",
     "dev": "concurrently \"npm:server\" \"npm:client\"",
     "client": "vite",
     "server": "nodemon server/index.js",

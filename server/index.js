@@ -13,7 +13,12 @@ const rootDir = path.resolve(__dirname, '..')
 const dataDir = path.join(rootDir, 'data')
 fs.mkdirSync(dataDir, { recursive: true })
 
-const db = new Database(path.join(dataDir, 'media.sqlite'))
+const defaultDbPath = path.join(dataDir, 'media.sqlite')
+const configuredDbPath = process.env.MEDIA_DB_PATH
+  ? path.resolve(rootDir, process.env.MEDIA_DB_PATH)
+  : defaultDbPath
+fs.mkdirSync(path.dirname(configuredDbPath), { recursive: true })
+const db = new Database(configuredDbPath)
 db.pragma('journal_mode = WAL')
 
 db.exec(`
