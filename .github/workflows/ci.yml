@@ -7,30 +7,33 @@ on:
     branches: [main]
 
 jobs:
-  build-and-test:
+  quality-gate:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: Install locked dependencies
         run: npm ci
 
-      - name: Install Playwright browser
+      - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Build app
+      - name: Build frontend
         run: npm run build
+
+      - name: Lint source
+        run: npm run lint
 
       - name: Run unit tests
         run: npm run test:unit
 
-      - name: Run e2e tests
+      - name: Run backend-backed e2e tests
         run: npm run test:e2e
