@@ -24,12 +24,24 @@ import {
   selectedCollectionTitles,
   titleMatchKey,
 } from './known-media.js'
+import {
+  geminiJsonArray,
+  geminiModelQueue,
+  geminiRecommendations,
+} from './services/gemini.js'
+import { createTmdbService } from './services/tmdb.js'
 
 const app = express()
 const PORT = Number(process.env.PORT || 3000)
 const tmdbKey = process.env.TMDB_API_KEY
 const tmdbToken = process.env.TMDB_READ_ACCESS_TOKEN
 const posterBase = 'https://image.tmdb.org/t/p/w500'
+const {
+  tmdbFetch,
+  mapTmdbResult,
+  hydrateTmdb,
+  findBestTmdb,
+} = createTmdbService({ tmdbKey, tmdbToken, posterBase })
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
@@ -420,72 +432,6 @@ function insertMedia(payload) {
   return rowToMedia(db.prepare('SELECT * FROM media WHERE id = ?').get(result.lastInsertRowid))
 }
 
-async function tmdbFetch(url) {
-  const headers = tmdbToken ? { Authorization: `Bearer ${tmdbToken}` } : {}
-  const keyParam = tmdbKey ? `${url.includes('?') ? '&' : '?'}api_key=${tmdbKey}` : ''
-  const response = await fetch(`${url}${keyParam}`, { headers })
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`TMDB request failed: ${response.status} ${text}`)
-  }
-  return response.json()
-}
-
-function normalizeTmdb(item, sourceType) {
-  const title = item.title || item.name || item.original_title || item.original_name
-  const date = item.release_date || item.first_air_date || ''
-  const type = sourceType === 'tv' ? 'show' : 'movie'
-  return {
-    tmdb_id: item.id,
-    title,
-    type,
-    cover_art: item.poster_path ? `${posterBase}${item.poster_path}` : '',
-    description: item.overview || '',
-    release_year: date ? date.slice(0, 4) : '',
-    tmdb_rating: item.vote_average ? Number(item.vote_average.toFixed(1)) : null,
-    genres: [],
-    tags: [],
-    runtime: 0,
-  }
-}
-
-async function hydrateTmdb(item, sourceType) {
-  const detailType = sourceType === 'tv' ? 'tv' : 'movie'
-  const detail = await tmdbFetch(`https://api.themoviedb.org/3/${detailType}/${item.tmdb_id}?language=en-US`)
-  const genres = (detail.genres || []).map((genre) => genre.name)
-  return {
-    ...item,
-    genres,
-    tags: genres,
-    runtime:
-      detail.runtime ||
-      (Array.isArray(detail.episode_run_time) ? detail.episode_run_time[0] : 0) ||
-      0,
-  }
-}
-
-async function findBestTmdb(title, type, preferredYear = '') {
-  try {
-    const data = await tmdbFetch(`https://api.themoviedb.org/3/search/multi?language=en-US&include_adult=false&query=${encodeURIComponent(title)}`)
-    const results = (data.results || []).filter((item) => ['movie', 'tv'].includes(item.media_type))
-    const preferredMediaType = type === 'show' || type === 'anime' ? 'tv' : type === 'movie' ? 'movie' : null
-    const yearMatch = preferredYear
-      ? results.find((item) => {
-          const date = item.release_date || item.first_air_date || ''
-          return date.startsWith(preferredYear) && (!preferredMediaType || item.media_type === preferredMediaType)
-        })
-      : null
-    const match = preferredMediaType
-      ? yearMatch || results.find((item) => item.media_type === preferredMediaType) || results[0]
-      : yearMatch || results[0]
-    if (!match) return null
-    const normalized = normalizeTmdb(match, match.media_type)
-    return hydrateTmdb(normalized, match.media_type)
-  } catch {
-    return null
-  }
-}
-
 function librarySnapshot() {
   return mediaRows()
     .map((item) => `${item.title} (${item.type}, ${item.status}, genres: ${item.genres.join(', ') || 'none'}, rating: ${item.personal_rating || 'n/a'})`)
@@ -546,101 +492,6 @@ function expandImportedCollections(items) {
   }
 
   return expanded
-}
-
-function geminiModelQueue() {
-  return uniqueList([
-    process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
-    ...(process.env.GEMINI_MODEL_FALLBACKS || '').split(','),
-    'gemini-2.5-flash-lite',
-    'gemini-flash-lite-latest',
-    'gemini-3.1-flash-lite',
-    'gemini-3.1-flash-lite-preview',
-    'gemma-4-26b-a4b-it',
-    'gemini-2.0-flash-lite',
-    'gemini-2.0-flash',
-  ])
-}
-
-function geminiHeaders() {
-  const referer = process.env.GEMINI_HTTP_REFERER || 'http://localhost:5173/'
-  return {
-    'Content-Type': 'application/json',
-    Referer: referer,
-    Origin: referer.replace(/\/$/, ''),
-  }
-}
-
-function parseGeminiText(text, model, mode) {
-  const cleaned = text.replace(/```json|```/g, '').trim()
-  try {
-    const parsed = JSON.parse(cleaned)
-    if (!Array.isArray(parsed)) {
-      throw new Error('Gemini returned JSON that was not an array')
-    }
-    return parsed.map((item) => ({ ...item, sourceModel: model }))
-  } catch (error) {
-    throw new Error(`${model} returned unusable recommendation JSON: ${error.message}. Raw: ${cleaned.slice(0, 180) || 'empty response'} (${mode})`, { cause: error })
-  }
-}
-
-async function tryGeminiModel(model, prompt, mode) {
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: geminiHeaders(),
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        maxOutputTokens: 900,
-        responseMimeType: 'application/json',
-      },
-    }),
-  })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const message = data.error?.message || `Gemini request failed with ${response.status}`
-    throw new Error(`${model}: ${message}`)
-  }
-
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  return parseGeminiText(text, model, mode)
-}
-
-async function geminiJsonArray(prompt, mode, maxOutputTokens = 1600) {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error('Missing GEMINI_API_KEY')
-  }
-
-  const errors = []
-  for (const model of geminiModelQueue()) {
-    try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: geminiHeaders(),
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            maxOutputTokens,
-            responseMimeType: 'application/json',
-          },
-        }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        throw new Error(data.error?.message || `Gemini request failed with ${response.status}`)
-      }
-      return {
-        model,
-        fallbackCount: errors.length,
-        attemptedModels: geminiModelQueue(),
-        items: parseGeminiText(data.candidates?.[0]?.content?.parts?.[0]?.text || '', model, mode),
-      }
-    } catch (error) {
-      errors.push(`${model}: ${error.message}`)
-    }
-  }
-
-  throw new Error(`No Gemini model could interpret the PDF. ${errors[0] || ''}`.trim())
 }
 
 async function extractPdfText(buffer) {
@@ -929,62 +780,6 @@ async function importWatchlistFromPdf(buffer) {
   }
 }
 
-async function geminiRecommendations(mode, context) {
-  if (useE2eGeminiFixtures) {
-    return {
-      model: 'e2e-gemini-fixture',
-      attemptedModels: ['e2e-gemini-fixture'],
-      fallbackCount: 0,
-      suggestions: e2eGeminiFixtureRecommendations,
-    }
-  }
-
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error('Missing GEMINI_API_KEY')
-  }
-
-  const prompt = `
-Return JSON only. Recommend 6 media titles for a personal tracker.
-Schema: [{"title":"string","type":"movie|show|anime","reason":"string","mood":"string","confidence":1-100}]
-Mode: ${mode}
-User context:
-${librarySnapshot() || 'No saved media yet.'}
-Request:
-${context || 'Make balanced cinematic recommendations.'}
-Keep reasons brief and avoid titles already in the library.
-  `.trim()
-
-  const errors = []
-  for (const model of geminiModelQueue()) {
-    try {
-      const suggestions = await tryGeminiModel(model, prompt, mode)
-      return {
-        model,
-        attemptedModels: geminiModelQueue(),
-        fallbackCount: errors.length,
-        suggestions,
-      }
-    } catch (error) {
-      errors.push(error.message)
-    }
-  }
-
-  return {
-    model: null,
-    attemptedModels: geminiModelQueue(),
-    fallbackCount: errors.length,
-    errors,
-    suggestions: [{
-      title: 'Gemini is configured, but every model is unavailable',
-      type: 'custom',
-      reason: `${errors[0] || 'No Gemini model responded.'} The app tried ${errors.length} models automatically. Check quota, billing, model access, or referrer restrictions in .env.`,
-      mood: mode,
-      confidence: 0,
-      sourceModel: 'none',
-    }],
-  }
-}
-
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
@@ -1049,7 +844,7 @@ app.get('/api/search/tmdb', async (req, res) => {
     const items = (data.results || [])
       .filter((item) => ['movie', 'tv'].includes(item.media_type))
       .slice(0, 8)
-      .map((item) => normalizeTmdb(item, item.media_type))
+      .map((item) => mapTmdbResult(item, item.media_type))
     const hydrated = await Promise.all(items.slice(0, 5).map((item) => hydrateTmdb(item, item.type === 'show' ? 'tv' : 'movie')))
     res.json(hydrated.concat(items.slice(5)))
   } catch (error) {
@@ -1060,7 +855,11 @@ app.get('/api/search/tmdb', async (req, res) => {
 app.post('/api/recommendations', async (req, res) => {
   try {
     const { mode = 'personalized', context = '' } = req.body
-    res.json(await geminiRecommendations(mode, context))
+    res.json(await geminiRecommendations(mode, context, {
+      librarySnapshot,
+      useE2eGeminiFixtures,
+      e2eGeminiFixtureRecommendations,
+    }))
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
