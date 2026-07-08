@@ -40,6 +40,7 @@ A full-stack local media tracker for movies, TV, anime, and custom entries. The 
 - `npm run client` starts only Vite.
 - `npm run build` builds the frontend.
 - `npm run lint` runs ESLint.
+- `npm run test:unit` runs the Vitest unit tests in `tests/`.
 - `npm run test:e2e` runs the Playwright UI tests in `e2e/`.
 - `npm start` starts the API without nodemon.
 
