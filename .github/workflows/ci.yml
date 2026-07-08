@@ -29,5 +29,8 @@ jobs:
       - name: Build app
         run: npm run build
 
-      - name: Run mocked e2e tests
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run e2e tests
         run: npm run test:e2e
