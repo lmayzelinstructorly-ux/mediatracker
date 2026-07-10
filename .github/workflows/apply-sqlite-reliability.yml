@@ -1,0 +1,42 @@
+name: Apply SQLite reliability refactor
+
+on:
+  push:
+    branches:
+      - reliability/sqlite-migrations-indexes
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: reliability/sqlite-migrations-indexes
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Apply store wiring and tests
+        run: node scripts/apply-sqlite-reliability.mjs
+
+      - name: Verify changes
+        run: npm run check
+
+      - name: Commit verified implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/apply-sqlite-reliability.mjs .github/workflows/apply-sqlite-reliability.yml
+          git add -A
+          git commit -m "Wire indexed duplicate lookup and migration tests"
+          git push origin HEAD:reliability/sqlite-migrations-indexes
