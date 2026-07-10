@@ -22,7 +22,7 @@ function normalizeEvidence(value) {
 function normalizeImportedStatus(value, fallback = 'Want to Watch') {
   const text = String(value || '').toLowerCase()
   if (/\b(?:rewatch|watch again)\b/.test(text)) return 'Want to Rewatch'
-  if (/\b(?:watched|completed|complete|finished|done)\b/.test(text) && !/\b(?:not|un)watched\b/.test(text)) return 'Watched'
+  if (/\b(?:watched|completed|complete|finished|done)\b/.test(text) && !/\b(?:not\s+watched|unwatched)\b/.test(text)) return 'Watched'
   if (/\b(?:want to watch|to watch|watchlist|planning to watch|plan to watch)\b/.test(text)) return 'Want to Watch'
   return fallback
 }
@@ -85,7 +85,8 @@ function splitPdfTitleAndNote(value) {
     source = source.slice(0, separator.index).trim()
   }
 
-  source = source.replace(/\s*[[(]([^\])]+)[\])]\s*/g, (match, token) => {
+  source = source.replace(/\s*(?:\(([^)]+)\)|\[([^\]]+)\])\s*/g, (match, roundToken, squareToken) => {
+    const token = roundToken || squareToken
     if (!isMetadataToken(token)) return match
     metadata.push(token.trim())
     return ' '
