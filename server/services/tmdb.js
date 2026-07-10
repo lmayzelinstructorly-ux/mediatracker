@@ -1,3 +1,9 @@
+import {
+  parseSearchQuery,
+  rankTmdbResults,
+  selectBestTmdbMatch,
+} from './media-match.js'
+
 export function createTmdbService({ tmdbKey, tmdbToken, posterBase }) {
   async function tmdbFetch(url) {
     const headers = tmdbToken ? { Authorization: `Bearer ${tmdbToken}` } : {}
@@ -48,18 +54,15 @@ export function createTmdbService({ tmdbKey, tmdbToken, posterBase }) {
 
   async function findBestTmdb(title, type, preferredYear = '') {
     try {
-      const data = await tmdbFetch(`https://api.themoviedb.org/3/search/multi?language=en-US&include_adult=false&query=${encodeURIComponent(title)}`)
-      const results = (data.results || []).filter((item) => ['movie', 'tv'].includes(item.media_type))
-      const preferredMediaType = type === 'show' || type === 'anime' ? 'tv' : type === 'movie' ? 'movie' : null
-      const yearMatch = preferredYear
-        ? results.find((item) => {
-            const date = item.release_date || item.first_air_date || ''
-            return date.startsWith(preferredYear) && (!preferredMediaType || item.media_type === preferredMediaType)
-          })
-        : null
-      const match = preferredMediaType
-        ? yearMatch || results.find((item) => item.media_type === preferredMediaType) || results[0]
-        : yearMatch || results[0]
+      const hints = parseSearchQuery(title)
+      const query = hints.title
+      const effectiveType = type === 'custom' ? hints.preferredType || '' : type
+      const effectiveYear = preferredYear || hints.preferredYear
+      const data = await tmdbFetch(`https://api.themoviedb.org/3/search/multi?language=en-US&include_adult=false&query=${encodeURIComponent(query)}`)
+      const match = selectBestTmdbMatch(query, data.results, {
+        preferredType: effectiveType,
+        preferredYear: effectiveYear,
+      })
       if (!match) return null
       const normalized = mapTmdbResult(match, match.media_type)
       return hydrateTmdb(normalized, match.media_type)
@@ -69,10 +72,12 @@ export function createTmdbService({ tmdbKey, tmdbToken, posterBase }) {
   }
 
   return {
+    findBestTmdb,
+    hydrateTmdb,
+    mapTmdbResult,
+    parseSearchQuery,
+    rankTmdbResults,
     tmdbFetch,
     tmdbMediaType,
-    mapTmdbResult,
-    hydrateTmdb,
-    findBestTmdb,
   }
 }
