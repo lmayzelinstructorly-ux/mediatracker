@@ -1,8 +1,5 @@
 export const knownTitleCorrections = new Map([
   ['tomadachi game', 'Tomodachi Game'],
-  ['2025 superman', 'Superman 2025'],
-  ['2025 spuierman', 'Superman 2025'],
-  ['2025 spiderman', 'Superman 2025'],
 ])
 
 export const knownMediaCollections = [

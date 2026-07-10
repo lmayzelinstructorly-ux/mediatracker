@@ -1,4 +1,6 @@
 import { db } from './db.js'
+import { runLibraryNormalizationMigration } from './maintenance.js'
+import { normalizeMediaPayload } from './media-validation.js'
 import {
   applyKnownTitleCorrection,
   findKnownCollection,
@@ -316,31 +318,19 @@ function normalizeExistingLibrary() {
   dedupeExistingMedia()
 }
 
+function runLibraryMaintenanceMigrations() {
+  return runLibraryNormalizationMigration({
+    db,
+    normalizeLibrary: normalizeExistingLibrary,
+  })
+}
 
 function bindMediaPayload(payload) {
-  const status = payload.status || 'Want to Watch'
-  const completedAt =
-    status === 'Watched' ? payload.completed_at || new Date().toISOString() : null
-
+  const media = normalizeMediaPayload(payload)
   return {
-    tmdb_id: payload.tmdb_id || null,
-    title: payload.title?.trim(),
-    type: payload.type || 'movie',
-    cover_art: payload.cover_art || '',
-    genres: JSON.stringify(payload.genres || []),
-    tags: JSON.stringify(payload.tags || payload.genres || []),
-    description: payload.description || '',
-    runtime: payload.runtime || 0,
-    release_year: payload.release_year || '',
-    tmdb_rating: payload.tmdb_rating || null,
-    status,
-    priority: payload.priority || 0,
-    personal_rating: payload.personal_rating || null,
-    reflection: payload.reflection || '',
-    season: payload.season || 1,
-    episode: payload.episode || 0,
-    completed_at: completedAt,
-    reminder_at: payload.reminder_at || null,
+    ...media,
+    genres: JSON.stringify(media.genres),
+    tags: JSON.stringify(media.tags),
   }
 }
 
@@ -400,6 +390,7 @@ export {
   mediaIdentityKey,
   mediaRows,
   normalizeExistingLibrary,
+  runLibraryMaintenanceMigrations,
   parseJson,
   rowToMedia,
   splitTrailingReleaseYear,
