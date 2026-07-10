@@ -30,17 +30,4 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run end-to-end tests
-        id: e2e
-        continue-on-error: true
-        run: npm run test:e2e -- --reporter=line > playwright-debug.log 2>&1
-
-      - name: Upload Playwright diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-debug-log
-          path: playwright-debug.log
-
-      - name: Fail when end-to-end tests fail
-        if: steps.e2e.outcome == 'failure'
-        run: exit 1
+        run: npm run test:e2e
