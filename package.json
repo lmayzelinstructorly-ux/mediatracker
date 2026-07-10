@@ -2,18 +2,21 @@
   "name": "mediatracker",
   "private": true,
   "version": "0.0.0",
+  "description": "FrameLog: a local-first personal media tracker.",
   "type": "module",
   "scripts": {
-    "predev": "node e2e/global-setup.js",
-    "dev": "concurrently \"npm:server\" \"npm:client\"",
-    "client": "vite",
-    "server": "nodemon server/index.js",
+    "dev": "concurrently \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:client": "vite",
+    "dev:server": "nodemon server/index.js",
     "start": "node server/index.js",
     "build": "vite build",
-    "lint": "eslint .",
     "preview": "vite preview",
+    "lint": "eslint .",
+    "test": "npm run test:unit",
     "test:unit": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "check": "npm run lint && npm run test:unit && npm run build"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
