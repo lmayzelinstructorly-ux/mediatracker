@@ -1,29 +1,14 @@
 import { PDFParse } from 'pdf-parse'
+import {
+  mergeExtractedItems,
+  normalizeImportedStatus,
+  normalizeImportedType,
+  parseWatchlistLines,
+  splitPdfTitleAndNote,
+} from './pdf-watchlist-parser.js'
 
 function uniqueList(items) {
-  return [...new Set(items.map((item) => item.trim()).filter(Boolean))]
-}
-
-function splitPdfTitleAndNote(value) {
-  const text = normalizePdfTitle(value)
-  if (!text) return { title: '', notes: '' }
-
-  const separatorMatch = text.match(/\s+(?:--?|\u2014|\u2013)\s+|\t+|\s{3,}/)
-  if (separatorMatch?.index > 0) {
-    const title = text.slice(0, separatorMatch.index).trim()
-    const notes = text.slice(separatorMatch.index + separatorMatch[0].length).trim()
-    if (title && notes) return { title, notes }
-  }
-
-  const parentheticalMatch = text.match(/^(.*?)\s*\(([^)]{3,80})\)\s*$/)
-  if (parentheticalMatch) {
-    const note = parentheticalMatch[2].trim()
-    if (/\b(maybe|note|with|watch|rewatch|later|soon|friend|family|favorite|fav|skip|priority|rec|recommended)\b/i.test(note)) {
-      return { title: parentheticalMatch[1].trim(), notes: note }
-    }
-  }
-
-  return { title: text, notes: '' }
+  return [...new Set(items.map((item) => String(item || '').trim()).filter(Boolean))]
 }
 
 async function extractPdfText(buffer) {
@@ -74,89 +59,33 @@ function shouldUseCorrectedTitle(original, corrected) {
   return titleDistance(cleanOriginal, cleanCorrected) <= Math.max(2, Math.ceil(maxLength * 0.22))
 }
 
-function parseWatchlistLines(text) {
-  let status = 'Want to Watch'
-  let priority = 1000
-  const items = []
-  const seen = new Set()
-
-  for (const rawLine of text.split('\n')) {
-    const line = rawLine.trim()
-    if (!line || /^--\s*\d+\s+of\s+\d+\s*--$/i.test(line)) continue
-    if (/^PLANNING TO WATCH/i.test(line)) {
-      status = 'Want to Watch'
-      continue
-    }
-    if (/^WANT TO REWATCH/i.test(line)) {
-      status = 'Want to Rewatch'
-      continue
-    }
-    if (/^HAVE WATCHED/i.test(line)) {
-      status = 'Watched'
-      continue
-    }
-
-    const startsWithBullet = line.charCodeAt(0) === 9679 || line.startsWith('- ') || line.startsWith('* ')
-    if (!startsWithBullet) continue
-
-    const { title, notes } = splitPdfTitleAndNote(line.slice(1))
-    if (!title) continue
-    const key = `${title.toLowerCase()}|${status}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    items.push({
-      title,
-      type: 'custom',
-      status,
-      priority: priority--,
-      tags: ['PDF import'],
-      notes,
-    })
-  }
-
-  return items
-}
-
-function normalizeImportedStatus(status) {
-  const value = String(status || '').toLowerCase()
-  if (value.includes('rewatch')) return 'Want to Rewatch'
-  if (value.includes('watch') && value.includes('want')) return 'Want to Watch'
-  if (value.includes('watched') || value.includes('complete') || value.includes('done')) return 'Watched'
-  return 'Want to Watch'
-}
-
-function normalizeImportedType(type) {
-  const value = String(type || '').toLowerCase()
-  if (value.includes('anime')) return 'anime'
-  if (value.includes('tv') || value.includes('show') || value.includes('series')) return 'show'
-  if (value.includes('movie') || value.includes('film')) return 'movie'
-  return 'custom'
-}
-
 function buildPdfImportPrompt(text, fallbackItems) {
   const fallbackList = fallbackItems
     .slice(0, 120)
-    .map((item, index) => `${index + 1}. ${item.title}${item.notes ? ` [note: ${item.notes}]` : ''}`)
+    .map((item, index) => `${index + 1}. ${item.title}${item.release_year ? ` (${item.release_year})` : ''}${item.notes ? ` [note: ${item.notes}]` : ''}`)
     .join('\n')
 
   return `
 Return JSON only. Extract a watchlist from this PDF text.
-Schema: [{"title":"string","type":"movie|show|anime|custom","status":"Watched|Want to Watch|Want to Rewatch","priority":1-100,"tags":["string"],"notes":"string"}]
+Schema: [{"title":"string","type":"movie|show|anime|custom","status":"Watched|Want to Watch|Want to Rewatch","release_year":"YYYY or blank","priority":1-100,"tags":["string"],"notes":"string"}]
 Rules:
 - Include only real media titles, not headings, page numbers, dates, instructions, ratings, or layout labels.
-- If a media title has side text next to it, after it, in a margin, or after separators like "-", "--", em dash, tabs, or wide spacing, keep only the media name in "title" and put the side text in "notes".
-- Do not include personal notes, comments, reminders, dates, "watch with...", "maybe", "recommended by...", or priority text inside "title".
-- Infer type and status when possible. Default status is "Want to Watch".
+- Every title must be grounded in the PDF text, except individual installments expanded from an explicitly named collection.
+- Treat nearby year, type, and status labels as metadata. Put years in release_year instead of title.
+- If a media title has side text next to it, after it, in a margin, or after separators, keep only the media name in title and put the side text in notes.
+- Do not include personal notes, comments, reminders, dates, watch-with notes, recommendations, or priority text inside title.
+- Infer type and status only from evidence in the PDF. Keep type custom when movie versus show is unclear. Default status is Want to Watch.
+- Do not choose a similarly named title, sequel, remake, movie, or show just because it is popular. Preserve the PDF wording when uncertain.
 - Use higher priority for titles that appear ranked, starred, highlighted, or near the top.
-- When the PDF says an entire trilogy, saga, series, universe, collection, or franchise should be watched, expand it into the individual well-known movies/shows when you are confident. Return one JSON object per installment so the app creates separate poster icons/cards.
-- For expanded collections, add a shared tag like "Lord of the Rings collection" or "Star Wars franchise". Keep notes short, such as "Expanded from trilogy request".
-- If a franchise request is too broad or ambiguous to expand confidently, return a single custom item named like "Alien franchise" with tags ["Collection"] and explain the ambiguity in notes.
-- Preserve subtitles that are part of the real title, such as "Mission: Impossible" or "Spider-Man: Into the Spider-Verse".
-- Return every media title you can identify.
+- When the PDF explicitly requests an entire trilogy, saga, series, universe, collection, or franchise, expand it only when the installments are well known and unambiguous.
+- For expanded collections, add one shared collection tag and a short expansion note.
+- If a franchise request is broad or ambiguous, return one custom collection item instead of guessing installments.
+- Preserve subtitles that are part of the real title, such as Mission: Impossible or Spider-Man: Into the Spider-Verse.
+- Return every supported media title you can identify.
 Examples:
-- "Pacific Rim: The Black    watch after season 1" => {"title":"Pacific Rim: The Black","type":"show","status":"Want to Watch","priority":80,"tags":[],"notes":"watch after season 1"}
-- "The Dark Knight trilogy" => return "Batman Begins", "The Dark Knight", and "The Dark Knight Rises" as separate movie objects tagged "The Dark Knight trilogy".
-- "all Hunger Games movies" => return the individual Hunger Games films as separate movie objects tagged "Hunger Games collection".
+- "Pacific Rim: The Black    watch after season 1" => {"title":"Pacific Rim: The Black","type":"show","status":"Want to Watch","release_year":"","priority":80,"tags":[],"notes":"watch after season 1"}
+- "Arrival | Movie | 2016" => {"title":"Arrival","type":"movie","status":"Want to Watch","release_year":"2016","priority":80,"tags":[],"notes":""}
+- "The Dark Knight trilogy" => return Batman Begins, The Dark Knight, and The Dark Knight Rises as separate movie objects tagged The Dark Knight trilogy.
 Simple parser candidates, if useful:
 ${fallbackList || 'none'}
 PDF text:
@@ -211,9 +140,10 @@ export function createPdfImportService({
           ...item,
           title,
           type: 'movie',
+          release_year: '',
           priority: Math.max(1, priority - index),
           tags: uniqueList([...tags, collection.label, 'Collection']),
-          notes: uniqueList([item.notes || '', `Expanded from ${sourceTitle}`].map(String)).join(' / '),
+          notes: uniqueList([item.notes, `Expanded from ${sourceTitle}`]).join(' / '),
         })
       })
     }
@@ -238,12 +168,13 @@ Return JSON only. Correct obvious spelling typos in media titles.
 Schema: [{"originalTitle":"string","correctedTitle":"string"}]
 Rules:
 - Return one object for every input title, in the same order.
-- Only fix spelling/spacing/capitalization typos for known movies, shows, or anime.
-- Preserve season/franchise wording when it is meaningful.
+- Only fix spelling, spacing, or capitalization typos for known movies, shows, or anime.
+- Preserve season, year, subtitle, and franchise wording when meaningful.
+- Never switch to a different franchise, sequel, remake, movie, or show.
 - Do not invent new titles. If unsure, keep correctedTitle identical to originalTitle.
 Titles:
 ${chunk.map((item, index) => `${index + 1}. ${item.title}`).join('\n')}
-    `.trim()
+      `.trim()
 
       try {
         const interpreted = await geminiJsonArray(prompt, 'pdf-title-correction', 3000)
@@ -253,7 +184,7 @@ ${chunk.map((item, index) => `${index + 1}. ${item.title}`).join('\n')}
           }
         })
       } catch {
-        // Title correction is a quality pass; importing the raw PDF is still better than failing.
+        // Title correction is optional; importing grounded raw titles is safer than failing.
       }
     }
 
@@ -263,7 +194,7 @@ ${chunk.map((item, index) => `${index + 1}. ${item.title}`).join('\n')}
         return { ...item, originalTitle: item.title, title: knownCorrection }
       }
 
-      const correctedTitle = corrections.get(item.title.toLowerCase())
+      const correctedTitle = corrections.get(String(item.title).toLowerCase())
       return shouldUseCorrectedTitle(item.title, correctedTitle)
         ? { ...item, originalTitle: item.title, title: normalizePdfTitle(correctedTitle) }
         : item
@@ -288,7 +219,14 @@ ${chunk.map((item, index) => `${index + 1}. ${item.title}`).join('\n')}
       try {
         const aiInterpreted = await geminiJsonArray(buildPdfImportPrompt(text, fallbackItems), 'pdf-watchlist-import', 5000)
         if (aiInterpreted.items.length > 0) {
-          interpreted = aiInterpreted
+          interpreted = {
+            ...aiInterpreted,
+            items: mergeExtractedItems({
+              text,
+              aiItems: aiInterpreted.items,
+              fallbackItems,
+            }),
+          }
         }
       } catch (error) {
         if (fallbackItems.length === 0) throw error
@@ -306,40 +244,55 @@ ${chunk.map((item, index) => `${index + 1}. ${item.title}`).join('\n')}
       const titleParts = splitTrailingReleaseYear(parsedTitle.title)
       const title = titleParts.title
       if (!title) continue
-      const notes = uniqueList([rawItem.notes || '', parsedTitle.notes].map(String)).join(' / ')
 
-      const type = normalizeImportedType(rawItem.type)
-      const status = normalizeImportedStatus(rawItem.status)
-      const key = existingMediaKey({ title, type, status })
+      const notes = uniqueList([rawItem.notes, parsedTitle.notes]).join(' / ')
+      const type = normalizeImportedType([rawItem.type, parsedTitle.type, notes].filter(Boolean).join(' '))
+      const status = normalizeImportedStatus([rawItem.status, parsedTitle.status, notes].filter(Boolean).join(' '))
+      const preferredYear = String(rawItem.release_year || parsedTitle.release_year || titleParts.year || '')
+      const key = existingMediaKey({ title, type, release_year: preferredYear, status })
       if (existingKeys.has(key)) {
         skipped.push({ title, type, status, reason: 'Already exists' })
         continue
       }
+
       existingKeys.add(key)
-      candidates.push({ rawItem: { ...rawItem, notes }, title, preferredYear: titleParts.year, type, status, index })
+      candidates.push({
+        rawItem: { ...rawItem, notes },
+        title,
+        preferredYear,
+        type,
+        status,
+        index,
+      })
     }
 
     const enriched = await mapWithConcurrency(candidates, 5, async (candidate) => ({
       ...candidate,
-      tmdb: await findBestTmdb(candidate.title.replace(/\s*\([^)]*\)\s*$/, ''), candidate.type, candidate.preferredYear),
+      tmdb: await findBestTmdb(candidate.title, candidate.type, candidate.preferredYear),
     }))
 
     const created = []
     for (const candidate of enriched) {
       const { rawItem, title, type, status, index, tmdb } = candidate
       const tags = Array.isArray(rawItem.tags) ? rawItem.tags.filter(Boolean) : []
-      const savedTitle = candidate.preferredYear && tmdb?.release_year === candidate.preferredYear ? tmdb.title : title
+      const savedTitle = tmdb?.title || title
       const saved = insertMedia({
         ...(tmdb || {}),
         title: savedTitle,
         type: type === 'anime' ? 'anime' : tmdb?.type || type,
         status,
         priority: Number(rawItem.priority) || interpreted.items.length - index,
-        tags: uniqueList([...(tmdb?.tags || []), ...tags, 'PDF import']),
-        genres: tmdb?.genres || tags,
+        tags: uniqueList([...(tmdb?.tags || []), ...tags, 'PDF import', tmdb ? '' : 'Needs review']),
+        genres: tmdb?.genres || [],
         description: tmdb?.description || rawItem.notes || 'Imported from a PDF watchlist.',
+        release_year: tmdb?.release_year || candidate.preferredYear,
       })
-      created.push({ ...saved, importNote: rawItem.notes || '', sourceModel: rawItem.sourceModel || interpreted.model })
+      created.push({
+        ...saved,
+        importNote: rawItem.notes || '',
+        sourceModel: rawItem.sourceModel || interpreted.model,
+        matchedTmdb: Boolean(tmdb),
+      })
     }
 
     return {
