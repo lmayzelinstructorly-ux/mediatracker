@@ -1,7 +1,7 @@
 import { FileText, Plus, Search } from 'lucide-react'
 import { CustomEntry, MediaGrid, PdfImportPanel, SearchResult } from '../components/media.jsx'
 import { Panel, SectionTitle } from '../components/ui.jsx'
-import { isSameMedia, mediaKey, tabs } from '../lib/media.js'
+import { fallbackPoster, isSameMedia, mediaKey, tabs } from '../lib/media.js'
 import { classNames } from '../lib/ui.js'
 
 export function ListsPage({
@@ -69,7 +69,7 @@ export function ListsPage({
                         setSuggestionsOpen(false)
                       }}
                     >
-                      <img src={item.cover_art} alt="" />
+                      <img src={item.cover_art || fallbackPoster} alt="" />
                       <span>
                         <strong>{item.title}</strong>
                         <small>{item.type} / {item.release_year || 'unknown'} / {item.genres?.slice(0, 2).join(', ') || 'TMDB match'}</small>
