@@ -45,13 +45,14 @@ function createService(overrides = {}) {
       inserted.push(saved)
       return saved
     }),
-    findBestTmdb: vi.fn(async (title, type) => ({
+    findBestTmdb: vi.fn(async (title, type, preferredYear) => ({
       tmdb_id: title.length,
       title,
       type,
       tags: ['TMDB genre'],
       genres: ['TMDB genre'],
       runtime: 100,
+      release_year: preferredYear,
       description: `${title} from TMDB`,
     })),
     geminiJsonArray: vi.fn(async () => ({ items: [] })),
@@ -76,7 +77,7 @@ describe('createPdfImportService', () => {
     process.env.GEMINI_API_KEY = originalGeminiKey
   })
 
-  it('imports bullet-list PDF items, skips duplicates, enriches candidates, and tags inserted media', async () => {
+  it('imports structured PDF items, skips duplicates, expands collections, and passes type/year hints to TMDB', async () => {
     process.env.GEMINI_API_KEY = ''
     const collection = {
       label: 'The Dark Knight trilogy',
@@ -91,11 +92,11 @@ describe('createPdfImportService', () => {
     const result = await service.importWatchlistFromPdf(
       tinyPdf([
         'PLANNING TO WATCH',
-        '- Arrival',
+        '1. Arrival (2016) [Movie]',
         '- Already Saved',
         '- The Dark Knight trilogy',
         'HAVE WATCHED',
-        '- Completed Show',
+        '- Completed Show [TV]',
       ]),
     )
 
@@ -117,12 +118,28 @@ describe('createPdfImportService', () => {
     ])
     expect(dependencies.selectedCollectionTitles).toHaveBeenCalledWith('The Dark Knight trilogy', collection)
     expect(dependencies.findBestTmdb).toHaveBeenCalledTimes(5)
-    expect(dependencies.findBestTmdb).toHaveBeenCalledWith('Arrival', 'custom', '')
-    expect(dependencies.findBestTmdb).toHaveBeenCalledWith('Completed Show', 'custom', '')
+    expect(dependencies.findBestTmdb).toHaveBeenCalledWith('Arrival', 'movie', '2016')
+    expect(dependencies.findBestTmdb).toHaveBeenCalledWith('Completed Show', 'show', '')
     expect(dependencies.insertMedia).toHaveBeenCalledTimes(5)
     expect(inserted.every((item) => item.tags.includes('PDF import'))).toBe(true)
+    expect(inserted.find((item) => item.title === 'Arrival')).toMatchObject({ type: 'movie', release_year: '2016' })
     expect(inserted.find((item) => item.title === 'Batman Begins').tags).toEqual(
       expect.arrayContaining(['TMDB genre', 'The Dark Knight trilogy', 'Collection', 'PDF import']),
     )
+  })
+
+  it('keeps an unmatched title and marks it for review instead of attaching weak metadata', async () => {
+    process.env.GEMINI_API_KEY = ''
+    const { service, inserted } = createService({
+      findBestTmdb: vi.fn(async () => null),
+    })
+
+    const result = await service.importWatchlistFromPdf(
+      tinyPdf(['WATCHLIST', '- The Office']),
+    )
+
+    expect(result.created).toHaveLength(1)
+    expect(result.created[0]).toMatchObject({ title: 'The Office', type: 'custom', matchedTmdb: false })
+    expect(inserted[0].tags).toEqual(expect.arrayContaining(['PDF import', 'Needs review']))
   })
 })
