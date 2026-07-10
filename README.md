@@ -1,6 +1,25 @@
-# FrameLog Personal Media Tracker
+# FrameLog
 
-A full-stack local media tracker for movies, TV, anime, and custom entries. The app uses React, Tailwind CSS, Express, SQLite, TMDB metadata, and Gemini recommendations.
+FrameLog is a single-user, local-first tracker for movies, TV shows, anime, and custom media. The React app talks to an Express API, and the API stores the library in a local SQLite database.
+
+The app does not require an account. TMDB supplies media metadata, while Gemini powers recommendations and improves PDF watchlist imports.
+
+## Main features
+
+- Search TMDB and save titles with posters, descriptions, genres, runtimes, years, and ratings.
+- Track `Watched`, `Want to Watch`, and `Want to Rewatch` lists.
+- Add custom entries that do not exist on TMDB.
+- Import watchlists from PDFs.
+- Save ratings, reflections, season and episode progress, tags, priorities, and reminders.
+- View recommendations, statistics, a watched timeline, and a year-in-review summary.
+- Export a JSON backup and restore only missing items without overwriting the current library.
+
+## Requirements
+
+- Node.js 22
+- npm
+- A TMDB API key or TMDB read access token for metadata search
+- A Gemini API key for recommendations and AI-assisted PDF importing
 
 ## Setup
 
@@ -10,64 +29,75 @@ A full-stack local media tracker for movies, TV, anime, and custom entries. The 
    npm install
    ```
 
-2. Rename `.env.example` to `.env` and fill in your keys:
+2. Copy `.env.example` to `.env` and add your API credentials.
 
-   ```bash
-   GEMINI_API_KEY=your_gemini_api_key_here
-   TMDB_API_KEY=your_tmdb_api_key_here
-   PORT=3000
-   GEMINI_MODEL=gemini-2.5-flash-lite
-   GEMINI_MODEL_FALLBACKS=gemini-flash-lite-latest,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemma-4-26b-a4b-it
-   GEMINI_HTTP_REFERER=http://localhost:5173/
-   ```
-
-   A local `.env` file is ignored by Git. The backend reads keys from this file so they are not exposed directly in the browser.
-   If your Gemini key has HTTP referrer restrictions, make sure `GEMINI_HTTP_REFERER` matches an allowed referrer for that key.
-   If the primary Gemini model hits quota, the backend automatically tries each model in `GEMINI_MODEL_FALLBACKS`.
-
-3. Start the app:
+3. Start the frontend and backend together:
 
    ```bash
    npm run dev
    ```
 
-   The Express API runs on `http://localhost:3000` and Vite serves the React app on `http://localhost:5173`.
+4. Open `http://localhost:5173`.
 
-## Scripts
+The Express API runs at `http://localhost:3000`. Vite forwards browser requests beginning with `/api` to that server.
 
-- `npm run dev` starts the backend and frontend together.
-- `npm run server` starts only the Express API with nodemon.
-- `npm run client` starts only Vite.
-- `npm run build` builds the frontend.
-- `npm run lint` runs ESLint.
-- `npm run test:unit` runs the Vitest unit tests in `tests/`.
-- `npm run test:e2e` runs the Playwright UI tests in `e2e/`.
-- `npm start` starts the API without nodemon.
+## Commands
 
-## Testing
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the React frontend and Express backend in development mode. |
+| `npm run dev:client` | Start only the Vite frontend. |
+| `npm run dev:server` | Start only the Express backend with automatic restarts. |
+| `npm start` | Start only the Express backend without automatic restarts. |
+| `npm run check` | Run linting, unit tests, and a production build. |
+| `npm test` | Run unit tests. |
+| `npm run test:e2e` | Run Playwright end-to-end tests in Chromium. |
+| `npm run test:e2e:ui` | Open Playwright's interactive test runner. |
+| `npm run build` | Create the production frontend build in `dist/`. |
+| `npm run preview` | Preview the production frontend build. |
 
-Playwright e2e tests live in `e2e/`. They run the real Vite frontend and Express backend with `MEDIA_DB_PATH=data/e2e-test.sqlite`, so coverage can exercise SQLite-backed flows without touching `data/media.sqlite`.
+Run `npm run check` before committing. Use `npm run test:e2e` when a change affects a user flow, an API route, or stored data.
 
-## Features
+## Project map
 
-- Add media through TMDB title search with poster, description, genre, runtime, year, and rating data.
-- Add offline custom media entries.
-- Import a PDF watchlist: the backend extracts PDF text, Gemini interprets the titles, TMDB enriches matches, and SQLite saves the created list.
-- Export a local JSON backup and safely restore it in merge mode.
-- Restore backups without clearing the existing library or overwriting saved media.
-- Track Watched, Want to Watch, and Want to Rewatch lists.
-- Store title, type, cover art, genre tags, status, priority, rating, reflection, progress, and reminders.
-- Prompt for a short reflection and rating when marking media as Watched.
-- Track season and episode progress for TV shows and anime.
-- Edit tags manually from each media card.
-- Filter lists in real time by title, tag, type, or status.
-- Show cinematic hover previews on media cards.
-- Request Gemini recommendations: personalized, trending, mood-based, and similar-to-this.
-- View stats for watched totals, estimated hours, genres, completion rate, average rating, monthly activity, and Year in Review.
-- Browse a chronological watched timeline with year and type filters.
-- Set browser notification reminders on Want to Watch entries.
-- Toggle dark and light themes.
+```text
+src/
+  App.jsx              Main React screen, state, and UI components
+  index.css            Global styles and Tailwind import
+server/
+  index.js             Express routes and application coordination
+  db.js                SQLite setup and schema
+  backup.js            Backup validation, preview, and restore planning
+  known-media.js       Known franchises, title cleanup, and collection helpers
+  e2e-fixtures.js      Deterministic API fixtures used by Playwright
+  services/
+    gemini.js           Gemini model selection and recommendation calls
+    tmdb.js             TMDB requests and result normalization
+    pdf-import.js       PDF extraction, interpretation, enrichment, and import
+tests/                  Vitest unit tests
+e2e/                    Playwright end-to-end tests
+.github/workflows/      GitHub Actions quality checks
+```
 
-## Local Data
+## Data and external services
 
-SQLite data is stored at `data/media.sqlite`. The app is single-user and fully local except for TMDB metadata requests and Gemini recommendation calls.
+The normal database is `data/media.sqlite`. Set `MEDIA_DB_PATH` to use a different file. SQLite files and `.env` are ignored by Git and should never be committed.
+
+End-to-end tests use `data/e2e-test.sqlite`, deterministic TMDB and Gemini fixtures, and a database cleanup step configured by Playwright. Starting the app normally does not touch the test database.
+
+The browser never receives API secrets. TMDB and Gemini requests are made by the Express backend.
+
+## Current scope
+
+FrameLog is designed as a personal local application. It does not currently provide authentication, cloud synchronization, multiple user accounts, or a hosted production database.
+
+## Before changing the code
+
+Read [`AGENTS.md`](AGENTS.md). It contains the rules for keeping future AI-assisted changes focused, tested, and free of duplicate or unused code.
+
+## Troubleshooting
+
+- Check the Settings page to confirm whether TMDB and Gemini credentials were detected.
+- If port `3000` or `5173` is already in use, stop the other process before running `npm run dev`.
+- Install the Playwright browser once with `npx playwright install chromium` if end-to-end tests cannot launch Chromium.
+- Delete only the test database when resetting tests. Do not delete `data/media.sqlite` unless you intend to erase the personal library.
