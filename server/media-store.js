@@ -1,4 +1,5 @@
 import { db } from './db.js'
+import { findExistingMediaInDatabase } from './media-lookup.js'
 import { runLibraryNormalizationMigration } from './maintenance.js'
 import { normalizeMediaPayload } from './media-validation.js'
 import {
@@ -335,21 +336,7 @@ function bindMediaPayload(payload) {
 }
 
 function findExistingMedia(payload) {
-  const titleKey = normalizeMediaTitle(payload.title)
-  if (!titleKey) return null
-
-  const type = mediaTypeFamily(payload.type)
-  const rows = db.prepare('SELECT * FROM media').all()
-  const match = rows.find((row) => {
-    if (mediaTypeFamily(row.type) !== type) return false
-    if (payload.tmdb_id != null && row.tmdb_id != null) {
-      return Number(row.tmdb_id) === Number(payload.tmdb_id)
-    }
-
-    const yearsCompatible = !payload.release_year || !row.release_year || String(payload.release_year) === String(row.release_year)
-    return normalizeMediaTitle(row.title) === titleKey && yearsCompatible
-  })
-  return match ? rowToMedia(match) : null
+  return findExistingMediaInDatabase(db, payload, rowToMedia)
 }
 
 function insertMedia(payload) {
