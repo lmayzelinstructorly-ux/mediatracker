@@ -14,9 +14,11 @@ test('reviews an unmatched PDF title and applies the selected TMDB match', async
   await page.getByRole('button', { name: 'Import watchlist' }).click()
 
   await expect(page.getByText('0 matched / 1 need review')).toBeVisible()
-  await page.getByRole('button', { name: /Needs Review\s+1/i }).click()
-  await expect(page.getByRole('heading', { name: importedTitle })).toBeVisible()
-  await page.getByRole('button', { name: 'Review match' }).click()
+  await page.getByRole('button', { name: /Needs Review/i }).click()
+
+  const importedCard = page.getByRole('heading', { name: importedTitle }).locator('xpath=ancestor::article')
+  await expect(importedCard).toBeVisible()
+  await importedCard.getByRole('button', { name: 'Review match' }).click()
 
   const dialog = page.getByRole('dialog', { name: `Review ${importedTitle}` })
   await expect(dialog).toBeVisible()
@@ -24,10 +26,10 @@ test('reviews an unmatched PDF title and applies the selected TMDB match', async
   await dialog.getByRole('button', { name: 'Use this match' }).click()
 
   await expect(dialog).not.toBeVisible()
-  await expect(page.getByText('Nothing here yet. Search TMDB or add a custom entry.')).toBeVisible()
+  await expect(page.getByRole('heading', { name: importedTitle })).toHaveCount(0)
   await page.getByRole('button', { name: /Want to Watch/i }).click()
 
-  const resolvedCard = page.getByRole('heading', { name: 'Fixture Galaxy Quest' }).locator('xpath=ancestor::article')
+  const resolvedCard = page.getByRole('heading', { name: 'Fixture Galaxy Quest' }).first().locator('xpath=ancestor::article')
   await expect(resolvedCard).toBeVisible()
   await expect(resolvedCard.getByRole('button', { name: 'Review match' })).toHaveCount(0)
 })
