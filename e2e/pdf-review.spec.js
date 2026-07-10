@@ -26,6 +26,8 @@ test('reviews an unmatched PDF title and applies the selected TMDB match', async
   await expect(dialog).not.toBeVisible()
   await expect(page.getByText('Nothing here yet. Search TMDB or add a custom entry.')).toBeVisible()
   await page.getByRole('button', { name: /Want to Watch/i }).click()
-  await expect(page.getByRole('heading', { name: 'Fixture Galaxy Quest' })).toBeVisible()
-  await expect(page.getByText('Needs review')).not.toBeVisible()
+
+  const resolvedCard = page.getByRole('heading', { name: 'Fixture Galaxy Quest' }).locator('xpath=ancestor::article')
+  await expect(resolvedCard).toBeVisible()
+  await expect(resolvedCard.getByRole('button', { name: 'Review match' })).toHaveCount(0)
 })
