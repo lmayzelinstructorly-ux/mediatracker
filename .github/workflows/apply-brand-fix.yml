@@ -1,0 +1,54 @@
+name: Apply MediaTracker branding
+
+on:
+  push:
+    branches: [fix/mediatracker-brand]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-branding:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/mediatracker-brand
+
+      - name: Replace user-facing FrameLog branding
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              'README.md': [('FrameLog', 'MediaTracker')],
+              'AGENTS.md': [('FrameLog', 'MediaTracker')],
+              'index.html': [('FrameLog', 'MediaTracker')],
+              'package.json': [('FrameLog', 'MediaTracker')],
+              'src/App.jsx': [
+                  ('FrameLog', 'MediaTracker'),
+                  ('framelog-backup-', 'mediatracker-backup-'),
+              ],
+              'e2e/smoke.spec.js': [('FrameLog', 'MediaTracker')],
+          }
+
+          for filename, pairs in replacements.items():
+              path = Path(filename)
+              text = path.read_text(encoding='utf-8')
+              for old, new in pairs:
+                  text = text.replace(old, new)
+              path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit branding fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md AGENTS.md index.html package.json src/App.jsx e2e/smoke.spec.js
+          if ! git diff --cached --quiet; then
+            git commit -m "Use MediaTracker branding"
+            git push origin HEAD:fix/mediatracker-brand
+          fi
