@@ -23,17 +23,11 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Run static checks, unit tests, and build
+        run: npm run check
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Build frontend
-        run: npm run build
-
-      - name: Lint source
-        run: npm run lint
-
-      - name: Run unit tests
-        run: npm run test:unit
-
-      - name: Run backend-backed e2e tests
+      - name: Run end-to-end tests
         run: npm run test:e2e
