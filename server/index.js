@@ -2,7 +2,7 @@ import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
 import { applyKnownTitleCorrection, findKnownCollection, selectedCollectionTitles } from './known-media.js'
-import { mediaIdentityKey, mediaRows, normalizeExistingLibrary, insertMedia, splitTrailingReleaseYear } from './media-store.js'
+import { mediaIdentityKey, mediaRows, runLibraryMaintenanceMigrations, insertMedia, splitTrailingReleaseYear } from './media-store.js'
 import { backupRouter } from './routes/backups.js'
 import { createHealthRouter } from './routes/health.js'
 import { createImportRouter } from './routes/imports.js'
@@ -38,7 +38,7 @@ const { importWatchlistFromPdf } = createPdfImportService({
   splitTrailingReleaseYear,
 })
 
-normalizeExistingLibrary()
+runLibraryMaintenanceMigrations()
 app.use(cors())
 app.use(express.json({ limit: '1mb' }))
 app.use('/api/health', createHealthRouter({ tmdbConfigured }))

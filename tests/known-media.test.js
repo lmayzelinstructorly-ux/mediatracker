@@ -10,7 +10,8 @@ import {
 describe('known media helpers', () => {
   it('applies known title corrections', () => {
     expect(applyKnownTitleCorrection('tomadachi game')).toBe('Tomodachi Game')
-    expect(applyKnownTitleCorrection('2025 spiderman')).toBe('Superman 2025')
+    expect(applyKnownTitleCorrection('2025 spiderman')).toBe('2025 spiderman')
+    expect(applyKnownTitleCorrection('2025 spuierman')).toBe('2025 spuierman')
   })
 
   it('finds The Dark Knight trilogy', () => {
