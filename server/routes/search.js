@@ -2,13 +2,20 @@ import { Router } from 'express'
 import { e2eTmdbFixtureResults, useE2eTmdbFixtures } from '../e2e-fixtures.js'
 import { applyKnownTitleCorrection } from '../known-media.js'
 
+function e2eResultsForQuery(query) {
+  const reviewFixture = /\breview\b/i.test(query)
+  return e2eTmdbFixtureResults.filter((item) =>
+    reviewFixture ? item.tmdb_id === 909091 : item.tmdb_id === 909090,
+  )
+}
+
 export function createSearchRouter({ hydrateTmdb, mapTmdbResult, parseSearchQuery, rankTmdbResults, tmdbFetch }) {
   const router = Router()
   router.get('/tmdb', async (req, res) => {
     try {
       const correctedQuery = applyKnownTitleCorrection(String(req.query.q || '').trim())
       if (!correctedQuery) return res.json([])
-      if (useE2eTmdbFixtures) return res.json(e2eTmdbFixtureResults)
+      if (useE2eTmdbFixtures) return res.json(e2eResultsForQuery(correctedQuery))
 
       const hints = parseSearchQuery(correctedQuery)
       const data = await tmdbFetch(`https://api.themoviedb.org/3/search/multi?language=en-US&include_adult=false&query=${encodeURIComponent(hints.title)}`)
