@@ -2,7 +2,7 @@
   "name": "mediatracker",
   "private": true,
   "version": "0.0.0",
-  "description": "FrameLog: a local-first personal media tracker.",
+  "description": "MediaTracker: a local-first personal media tracker.",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:client\"",

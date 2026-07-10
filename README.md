@@ -1,6 +1,6 @@
-# FrameLog
+# MediaTracker
 
-FrameLog is a single-user, local-first tracker for movies, TV shows, anime, and custom media. The React app talks to an Express API, and the API stores the library in a local SQLite database.
+MediaTracker is a single-user, local-first tracker for movies, TV shows, anime, and custom media. The React app talks to an Express API, and the API stores the library in a local SQLite database.
 
 The app does not require an account. TMDB supplies media metadata, while Gemini powers recommendations and improves PDF watchlist imports.
 
@@ -89,7 +89,7 @@ The browser never receives API secrets. TMDB and Gemini requests are made by the
 
 ## Current scope
 
-FrameLog is designed as a personal local application. It does not currently provide authentication, cloud synchronization, multiple user accounts, or a hosted production database.
+MediaTracker is designed as a personal local application. It does not currently provide authentication, cloud synchronization, multiple user accounts, or a hosted production database.
 
 ## Before changing the code
 

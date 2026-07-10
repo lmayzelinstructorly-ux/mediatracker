@@ -1,10 +1,10 @@
 # AI-assisted development rules
 
-Use these rules for every automated or AI-assisted change to FrameLog.
+Use these rules for every automated or AI-assisted change to MediaTracker.
 
 ## Keep the scope clear
 
-- FrameLog is a local, single-user media tracker.
+- MediaTracker is a local, single-user media tracker.
 - Do not add accounts, cloud storage, analytics, or deployment infrastructure unless the task explicitly requires them.
 - Preserve existing user data and backup compatibility.
 

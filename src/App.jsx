@@ -486,7 +486,7 @@ function App() {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `framelog-backup-${today}.json`
+      link.download = `mediatracker-backup-${today}.json`
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -633,7 +633,7 @@ function App() {
               <Clapperboard className="h-5 w-5 text-amber-300" />
             </span>
             <span>
-              <span className="block text-xl font-semibold tracking-[0.08em] text-[var(--heading)] uppercase">FrameLog</span>
+              <span className="block text-xl font-semibold tracking-[0.08em] text-[var(--heading)] uppercase">MediaTracker</span>
               <span className="text-sm text-[var(--muted)]">A private cinema ledger</span>
             </span>
           </button>
