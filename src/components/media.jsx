@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Bell, Check, Sparkles, Star, Tags, Trash2, Upload } from 'lucide-react'
+import { Bell, Check, CircleAlert, Sparkles, Star, Tags, Trash2, Upload } from 'lucide-react'
 import { fallbackPoster, groupedMediaItems, tabs, types } from '../lib/media.js'
+import { hasNeedsReview } from '../lib/review.js'
 import { classNames } from '../lib/ui.js'
 import { EmptyState, Select } from './ui.jsx'
 
@@ -57,6 +58,9 @@ function CustomEntry({ onAdd }) {
 
 function PdfImportPanel({ importing, result, onImport }) {
   const [file, setFile] = useState(null)
+  const createdItems = result?.created || []
+  const reviewCount = createdItems.filter(hasNeedsReview).length
+  const matchedCount = createdItems.length - reviewCount
 
   async function submit(event) {
     event.preventDefault()
@@ -77,12 +81,15 @@ function PdfImportPanel({ importing, result, onImport }) {
       </button>
       {result && (
         <div className="rounded border border-white/10 bg-white/5 p-3 text-sm leading-6 text-[var(--muted)]">
-          <p className="text-[var(--heading)]">{result.created?.length || 0} created / {result.skipped?.length || 0} skipped</p>
+          <p className="text-[var(--heading)]">{createdItems.length} created / {result.skipped?.length || 0} skipped</p>
+          <p>{matchedCount} matched / {reviewCount} need review</p>
           {result.extractedItems && <p>{result.extractedItems} titles found in PDF</p>}
           {result.model && <p>{result.model}{result.fallbackCount > 0 ? ` after ${result.fallbackCount} fallbacks` : ''}</p>}
           <div className="import-result-list">
-            {(result.created || []).slice(0, 12).map((item) => (
-              <p key={item.id} className="truncate">{item.title} / {item.status}</p>
+            {createdItems.slice(0, 12).map((item) => (
+              <p key={item.id} className="truncate">
+                {item.title} / {item.status}{hasNeedsReview(item) ? ' / needs review' : ''}
+              </p>
             ))}
           </div>
         </div>
@@ -91,7 +98,7 @@ function PdfImportPanel({ importing, result, onImport }) {
   )
 }
 
-function MediaGrid({ items, onComplete, onPatch, onDelete, onSimilar }) {
+function MediaGrid({ items, onComplete, onPatch, onDelete, onReview, onSimilar }) {
   if (!items.length) return <EmptyState text="Nothing here yet. Search TMDB or add a custom entry." />
   const groups = groupedMediaItems(items)
   return (
@@ -106,7 +113,7 @@ function MediaGrid({ items, onComplete, onPatch, onDelete, onSimilar }) {
           )}
           <div className="collection-items">
             {group.items.map((item) => (
-              <MediaCard key={item.id} item={item} onComplete={onComplete} onPatch={onPatch} onDelete={onDelete} onSimilar={onSimilar} />
+              <MediaCard key={item.id} item={item} onComplete={onComplete} onPatch={onPatch} onDelete={onDelete} onReview={onReview} onSimilar={onSimilar} />
             ))}
           </div>
         </section>
@@ -115,16 +122,22 @@ function MediaGrid({ items, onComplete, onPatch, onDelete, onSimilar }) {
   )
 }
 
-function MediaCard({ item, onComplete, onPatch, onDelete, onSimilar }) {
+function MediaCard({ item, onComplete, onPatch, onDelete, onReview, onSimilar }) {
   const [editingTags, setEditingTags] = useState((item.tags || []).join(', '))
   const [reminder, setReminder] = useState(item.reminder_at?.slice(0, 16) || '')
   const [showReminder, setShowReminder] = useState(Boolean(item.reminder_at))
+  const needsReview = hasNeedsReview(item)
 
   return (
     <article className="group media-card">
       <div className="relative aspect-[2/3] overflow-hidden rounded bg-zinc-900">
         <img className="h-full w-full object-cover transition duration-500 group-hover:scale-105" src={item.cover_art || fallbackPoster} alt="" />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-transparent opacity-90" />
+        {needsReview && (
+          <span className="absolute left-3 top-3 flex items-center gap-1 rounded border border-amber-300/40 bg-black/80 px-2 py-1 text-xs font-medium text-amber-200">
+            <CircleAlert className="h-3.5 w-3.5" /> Needs review
+          </span>
+        )}
         <div className="absolute bottom-0 p-4">
           <span className="pill">{item.type}</span>
           <h2 className="mt-3 text-2xl font-semibold leading-tight text-white">{item.title}</h2>
@@ -137,6 +150,11 @@ function MediaCard({ item, onComplete, onPatch, onDelete, onSimilar }) {
         </div>
       </div>
       <div className="card-controls">
+        {needsReview && (
+          <button className="secondary-command w-full" type="button" onClick={() => onReview(item)}>
+            <CircleAlert className="h-4 w-4" /> Review match
+          </button>
+        )}
         <div className="card-action-row">
           <Select value={item.status} onChange={(status) => (status === 'Watched' ? onComplete(item) : onPatch(item.id, { ...item, status }))} options={tabs} />
           <button className="icon-button" title="Similar to this" onClick={() => onSimilar(item)}><Sparkles className="h-4 w-4" /></button>

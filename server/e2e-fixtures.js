@@ -14,6 +14,18 @@ export const e2eTmdbFixtureResults = [
     release_year: '1999',
     tmdb_rating: 7.1,
   },
+  {
+    tmdb_id: 909091,
+    title: 'Fixture Review Match',
+    type: 'show',
+    cover_art: '',
+    genres: ['Mystery', 'Drama'],
+    tags: ['Mystery', 'Drama'],
+    description: 'A second deterministic TMDB-style fixture reserved for review workflow testing.',
+    runtime: 48,
+    release_year: '2024',
+    tmdb_rating: 8.2,
+  },
 ]
 
 export const e2eGeminiFixtureRecommendations = [
